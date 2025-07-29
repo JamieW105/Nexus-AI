@@ -1,0 +1,6 @@
+{
+  "name": "Nexus AI",
+  "description": "An AI-powered web development environment that allows you to build, preview, and chat with an AI assistant to create and modify code in real-time.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}

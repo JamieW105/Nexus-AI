@@ -1,0 +1,77 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cosmic AI Builder</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: '#0d0d1a',
+            surface: '#161625',
+            primary: '#7B2CBF',
+            accent: '#4cc9f0',
+            'soft-white': '#e0e0e0',
+            'light-gray': '#a0a0a0',
+            'lavender-glow': '#c3a1ff',
+            'cyan-glow': '#77e5ff',
+          },
+          boxShadow: {
+            'glow-purple': '0 0 15px 5px rgba(123, 44, 191, 0.4)',
+            'glow-lavender': '0 0 15px 5px rgba(195, 161, 255, 0.3)',
+          },
+          animation: {
+            pulse: 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          },
+          keyframes: {
+             pulse: {
+                '50%': { opacity: '.5' },
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        },
+      },
+    }
+  </script>
+  <style type="text/tailwindcss">
+    @tailwind base;
+    @tailwind components;
+    @tailwind utilities;
+
+    /* Custom scrollbar for better aesthetics */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #1a1a1a; }
+    ::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #5a5a5a; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.1.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+    "react/": "https://esm.sh/react@^19.1.1/",
+    "file-saver": "https://esm.sh/file-saver@^2.0.5",
+    "@google/genai": "https://esm.sh/@google/genai@^1.11.0",
+    "buffer": "https://esm.sh/buffer@^6.0.3",
+    "@monaco-editor/react": "https://esm.sh/@monaco-editor/react@^4.6.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-background">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
