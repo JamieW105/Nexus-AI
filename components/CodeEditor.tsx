@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { FileNode } from '../types';
-import { CloseIcon, FileIcon } from './icons';
+import { FileNode } from '../types.ts';
+import { CloseIcon, FileIcon } from './icons.tsx';
 import Editor from '@monaco-editor/react';
 
 interface CodeEditorProps {

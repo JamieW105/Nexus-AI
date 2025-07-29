@@ -1,5 +1,5 @@
 
-import { FileNode, ModelInfo } from './types';
+import { FileNode, ModelInfo } from './types.ts';
 
 const GITIGNORE_CONTENT = `# Dependencies
 node_modules/

@@ -1,14 +1,14 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { FileNode, ChatMessage, AiModel, ViewMode, FlatFileNode } from './types';
-import { INITIAL_FILES, AI_MODELS } from './constants';
-import useLocalStorage from './hooks/useLocalStorage';
-import FileExplorer from './components/FileExplorer';
-import CodeEditor from './components/CodeEditor';
-import Preview from './components/Preview';
-import ChatAssistant from './components/ChatAssistant';
-import { getAiResponse, AiServiceError } from './services/aiService';
-import { DownloadIcon, CodeIcon, EyeIcon } from './components/icons';
+import { FileNode, ChatMessage, AiModel, ViewMode, FlatFileNode, NodeType } from './types.ts';
+import { INITIAL_FILES, AI_MODELS } from './constants.ts';
+import useLocalStorage from './hooks/useLocalStorage.ts';
+import FileExplorer from './components/FileExplorer.tsx';
+import CodeEditor from './components/CodeEditor.tsx';
+import Preview from './components/Preview.tsx';
+import ChatAssistant from './components/ChatAssistant.tsx';
+import { getAiResponse, AiServiceError } from './services/aiService.ts';
+import { DownloadIcon, CodeIcon, EyeIcon } from './components/icons.tsx';
 import FileSaver from 'file-saver';
 import { Buffer } from 'buffer';
 
@@ -18,6 +18,7 @@ import { Buffer } from 'buffer';
 declare var JSZip: any;
 
 // --- UTILITY FUNCTIONS ---
+// These functions are pure and operate on the file tree structure.
 
 function findFileById(nodes: FileNode[], id: string): FileNode | null {
   for (const node of nodes) {
@@ -30,515 +31,392 @@ function findFileById(nodes: FileNode[], id: string): FileNode | null {
   return null;
 }
 
-function updateFileContentPure(targetFiles: FileNode[], id: string, content: string): FileNode[] {
-    const newFiles = JSON.parse(JSON.stringify(targetFiles));
-    const file = findFileById(newFiles, id);
-    if (file && file.type === 'file') {
-        file.content = content;
-    }
-    return newFiles;
-}
-
-function addFileOrFolderPure(targetFiles: FileNode[], parentId: string | null, node: FileNode): FileNode[] {
-    const newFiles = JSON.parse(JSON.stringify(targetFiles));
-    if (parentId === null) {
-        newFiles.push(node);
-    } else {
-        const parent = findFileById(newFiles, parentId);
-        if (parent && parent.type === 'folder') {
-            if (!parent.children) {
-                parent.children = [];
-            }
-            parent.children.push(node);
-        }
-    }
-    return newFiles;
-}
-
-function deleteFileOrFolderPure(targetFiles: FileNode[], id: string): FileNode[] {
-    const newFiles: FileNode[] = [];
-    for (const node of targetFiles) {
-        if (node.id === id) {
-            continue; // Skip this node, effectively deleting it
-        }
-        const newNode = JSON.parse(JSON.stringify(node));
-        if (newNode.type === 'folder' && newNode.children) {
-            newNode.children = deleteFileOrFolderPure(newNode.children, id);
-        }
-        newFiles.push(newNode);
-    }
-    return newFiles;
-}
-
-function getFlattenedFileTree(nodes: FileNode[], path = './'): FlatFileNode[] {
-    let flatList: FlatFileNode[] = [];
+function findParentOfNode(nodes: FileNode[], nodeId: string): FileNode | null {
     for (const node of nodes) {
-        const currentPath = path + node.name + (node.type === 'folder' ? '/' : '');
-        const flatNode: FlatFileNode = {
-            id: node.id,
-            name: node.name,
-            type: node.type,
-            path: currentPath,
-        };
-        flatList.push(flatNode);
+        if (node.type === 'folder' && node.children?.some(child => child.id === nodeId)) {
+            return node;
+        }
         if (node.type === 'folder' && node.children) {
-            flatList = flatList.concat(getFlattenedFileTree(node.children, currentPath));
+            const foundParent = findParentOfNode(node.children, nodeId);
+            if (foundParent) {
+                return foundParent;
+            }
         }
     }
-    return flatList;
+    return null; // Not found, or it's a root node with no parent
 }
 
-function getCleanFileTree(nodes: FileNode[]): any[] {
-  return nodes.map(node => {
-    const item: any = {
-      id: node.id,
-      name: node.name,
-      type: node.type,
-    };
+
+function updateFileContentPure(nodes: FileNode[], id: string, content: string): FileNode[] {
+    return nodes.map(node => {
+        if (node.id === id && node.type === 'file') {
+            return { ...node, content };
+        }
+        if (node.type === 'folder' && node.children) {
+            return { ...node, children: updateFileContentPure(node.children, id, content) };
+        }
+        return node;
+    });
+}
+
+function deleteNodePure(nodes: FileNode[], id: string): FileNode[] {
+    return nodes.filter(node => node.id !== id).map(node => {
+        if (node.type === 'folder' && node.children) {
+            return { ...node, children: deleteNodePure(node.children, id) };
+        }
+        return node;
+    });
+}
+
+function addNodePure(nodes: FileNode[], parentId: string | null, newNode: FileNode): FileNode[] {
+    if (parentId === null) {
+        return [...nodes, newNode];
+    }
+    return nodes.map(node => {
+        if (node.id === parentId && node.type === 'folder') {
+            return {
+                ...node,
+                children: [...(node.children || []), newNode],
+            };
+        }
+        if (node.type === 'folder' && node.children) {
+            return {
+                ...node,
+                children: addNodePure(node.children, parentId, newNode),
+            };
+        }
+        return node;
+    });
+}
+
+
+function flattenFileTree(nodes: FileNode[], pathPrefix = ''): FlatFileNode[] {
+  let flatList: FlatFileNode[] = [];
+  for (const node of nodes) {
+    const newPath = pathPrefix ? `${pathPrefix}/${node.name}` : node.name;
+    flatList.push({ id: node.id, name: node.name, type: node.type, path: newPath });
     if (node.type === 'folder' && node.children) {
-      item.children = getCleanFileTree(node.children);
+      flatList = flatList.concat(flattenFileTree(node.children, newPath));
     }
-    return item;
-  });
+  }
+  return flatList;
 }
 
-function findFileByPath(nodes: FileNode[], path: string): FileNode | null {
-    const parts = path.replace('./', '').split('/');
-    let currentNodes: FileNode[] | undefined = nodes;
-    let foundNode: FileNode | null = null;
-    
-    for (const part of parts) {
-        if (!currentNodes || !part) continue;
-        const searchResult = currentNodes.find(node => node.name === part);
-        if(!searchResult) return null;
-
-        foundNode = searchResult;
-        if (foundNode.type === 'folder') {
-            currentNodes = foundNode.children;
-        }
-    }
-    return foundNode;
-}
-
+// --- MAIN APP COMPONENT ---
 
 const App: React.FC = () => {
-  const [files, setFiles] = useLocalStorage<FileNode[]>('ai-web-builder-files', INITIAL_FILES);
-  const [activeFileId, setActiveFileId] = useLocalStorage<string | null>('ai-web-builder-active-file', '1-1');
-  const [openFileIds, setOpenFileIds] = useLocalStorage<string[]>('ai-web-builder-open-files', ['1-1', '1-2', '1-3', '2']);
-  const [messages, setMessages] = useLocalStorage<ChatMessage[]>('ai-web-builder-messages', []);
-  const [selectedModel, setSelectedModel] = useLocalStorage<AiModel>('selectedAiModel', 'gemini');
-  const [viewMode, setViewMode] = useState<ViewMode>('editor');
+  const [files, setFiles] = useLocalStorage<FileNode[]>('files', INITIAL_FILES);
+  const [activeFileId, setActiveFileId] = useLocalStorage<string | null>('activeFileId', '1-1');
+  const [openFiles, setOpenFiles] = useLocalStorage<FileNode[]>('openFiles', []);
+  const [chatMessages, setChatMessages] = useLocalStorage<ChatMessage[]>('chatMessages', []);
   const [isLoading, setIsLoading] = useState(false);
-  const [previewContent, setPreviewContent] = useState('');
-  
-  // State for auto-fix functionality
-  const [lastUserPrompt, setLastUserPrompt] = useState<string | null>(null);
-  const [lastAiActions, setLastAiActions] = useState<any | null>(null);
-  const [lastFileState, setLastFileState] = useState<FileNode[] | null>(null);
+  const [selectedModel, setSelectedModel] = useLocalStorage<AiModel>('selectedModel', 'gemini');
+  const [viewMode, setViewMode] = useState<ViewMode>('editor');
 
   const activeFile = activeFileId ? findFileById(files, activeFileId) : null;
-  const openFiles = openFileIds.map(id => findFileById(files, id)).filter(Boolean) as FileNode[];
 
-  const handleCodeChange = (id: string, content: string) => {
-    setFiles(currentFiles => updateFileContentPure(currentFiles, id, content));
-  };
-  
-  const handleFileSelect = (id: string) => {
-    setActiveFileId(id);
-    if (!openFileIds.includes(id)) {
-      setOpenFileIds([...openFileIds, id]);
-    }
-  };
-  
-  const handleCloseFile = (id: string) => {
-      const newOpenFileIds = openFileIds.filter(fileId => fileId !== id);
-      setOpenFileIds(newOpenFileIds);
-      if (activeFileId === id) {
-          setActiveFileId(newOpenFileIds.length > 0 ? newOpenFileIds[0] : null);
-      }
-  };
-
-  const parseAiResponse = (responseText: string): any => {
-    const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonMatch && jsonMatch[1]) {
-        try {
-            return JSON.parse(jsonMatch[1]);
-        } catch (e) {
-            console.error("Failed to parse JSON from markdown block:", e);
-        }
-    }
-
-    const looseJsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (looseJsonMatch && looseJsonMatch[0]) {
-      try {
-        return JSON.parse(looseJsonMatch[0]);
-      } catch (e) {
-         console.error("Failed to parse JSON from loose match:", e);
-         throw new Error(`Could not find a valid JSON object in the response. Raw response: ${responseText}`);
-      }
-    }
-    
-    // As a last resort, if the response is just the JSON string without any markers
-    try {
-      return JSON.parse(responseText);
-    } catch(e) {
-       throw new Error(`No valid JSON object found in the AI response. Raw response: ${responseText}`);
-    }
-  };
-  
-  const handleAutoFix = useCallback(async (errorMessage: string) => {
-    if (!lastUserPrompt || !lastAiActions || !lastFileState) {
-        setMessages(prev => [...prev, { role: 'assistant', content: "I don't have enough context to attempt a fix. Please try your last request again.", model: selectedModel, isError: true }]);
-        return;
-    }
-
-    setIsLoading(true);
-
-    const failedActionsString = JSON.stringify(lastAiActions, null, 2);
-
-    try {
-        const cleanFileTree = getCleanFileTree(lastFileState); // Use the state before the failed action
-        const fileStructureString = JSON.stringify(cleanFileTree, null, 2);
-
-        const idToPathMap = new Map(getFlattenedFileTree(lastFileState).map(node => [node.id, node.path]));
-        const openFilesContext = openFiles.map(file => {
-            const path = idToPathMap.get(file.id) || file.name;
-            const content = findFileById(lastFileState, file.id)?.content || '';
-            return `File: ${path} (id: ${file.id})\n\`\`\`\n${content}\n\`\`\``;
-        }).join('\n\n');
-
-        const fullPrompt = `
-          ATTEMPTING AUTO-FIX.
-          Original User Request: "${lastUserPrompt}"
-          
-          The following AI actions resulted in an error when applied:
-          \`\`\`json
-          ${failedActionsString}
-          \`\`\`
-
-          This produced the following error in the preview:
-          "${errorMessage}"
-
-          Current Project File Structure (with IDs):
-          ${fileStructureString}
-
-          Content of currently open files:
-          ${openFilesContext || 'No files are currently open.'}
-
-          Please analyze the error and the code that caused it, and provide a new, corrected set of actions to fix the problem.
-        `;
-      
-      const responseText = await getAiResponse(fullPrompt, selectedModel);
-      const parsedResponse = parseAiResponse(responseText);
-
-      setLastUserPrompt(null);
-      setLastAiActions(null);
-      setLastFileState(null);
-
-      if (parsedResponse.actions && Array.isArray(parsedResponse.actions)) {
-        let tempFiles = lastFileState; // Start from the state *before* the failed action
-        let tempOpenFileIds = [...openFileIds];
-        let tempActiveFileId = activeFileId;
-        const actionSummaries: string[] = ["Auto-fix applied:"];
-        let didModifyFiles = false;
-
-        for (const action of parsedResponse.actions) {
-             if (['edit', 'create', 'delete'].includes(action.type)) {
-                didModifyFiles = true;
-            }
-            if (action.type === 'edit') {
-                const fileToEdit = findFileById(tempFiles, action.fileId);
-                if (fileToEdit && typeof action.content === 'string') {
-                    tempFiles = updateFileContentPure(tempFiles, action.fileId, action.content);
-                    actionSummaries.push(`- Updated file: ${fileToEdit.name}`);
-                } else {
-                    actionSummaries.push(`- Skipped malformed 'edit' action for file ID ${action.fileId}.`);
-                }
-            } else if (action.type === 'create') {
-                const newId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-                const newNode: FileNode = { id: newId, name: action.name, type: action.fileType, ...(action.fileType === 'file' ? { content: action.content || '' } : { children: [] }) };
-                tempFiles = addFileOrFolderPure(tempFiles, action.parentId, newNode);
-                actionSummaries.push(`- Created ${action.fileType}: ${action.name}`);
-            } else if (action.type === 'delete') {
-                 const fileToDelete = findFileById(tempFiles, action.fileId);
-                if (fileToDelete) {
-                    tempFiles = deleteFileOrFolderPure(tempFiles, action.fileId);
-                    actionSummaries.push(`- Deleted ${fileToDelete.type}: ${fileToDelete.name}`);
-                    if (tempOpenFileIds.includes(action.fileId)) tempOpenFileIds = tempOpenFileIds.filter(fid => fid !== action.fileId);
-                    if (tempActiveFileId === action.fileId) tempActiveFileId = tempOpenFileIds.length > 0 ? tempOpenFileIds[0] : null;
-                }
-            } else if (action.type === 'chat') {
-                actionSummaries.push(`- ${action.message}`);
-            }
-        }
-        
-        setFiles(tempFiles);
-        setOpenFileIds(tempOpenFileIds);
-        setActiveFileId(tempActiveFileId);
-
-        if (didModifyFiles) {
-            setLastUserPrompt(prompt);
-            setLastAiActions(parsedResponse);
-            setLastFileState(files); // Save the original state
-        }
-
-        setMessages(prev => [...prev, { role: 'assistant', content: actionSummaries.join('\n'), model: selectedModel, isAutoFix: true }]);
-      } else {
-         throw new AiServiceError('AI returned an invalid action format during auto-fix.', 'invalid_format');
-      }
-
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during auto-fix.';
-        setMessages(prev => [...prev, { role: 'assistant', content: `Auto-fix failed: ${errorMessage}`, model: selectedModel, isError: true }]);
-        setLastUserPrompt(null);
-        setLastAiActions(null);
-        setLastFileState(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [files, openFiles, activeFileId, lastUserPrompt, lastAiActions, selectedModel, openFileIds, lastFileState]);
-  
-  const handlePreviewError = useCallback((errorMessage: string) => {
-    if (isLoading || !lastUserPrompt || !lastAiActions) {
-        return;
-    }
-    const autoFixMessage: ChatMessage = {
-        role: 'assistant',
-        content: `An error was detected in the preview. I will attempt to fix it.\n\nError: ${errorMessage}`,
-        model: selectedModel,
-        isAutoFix: true
-    };
-    setMessages(prev => [...prev, autoFixMessage]);
-    handleAutoFix(errorMessage);
-  }, [isLoading, lastUserPrompt, lastAiActions, selectedModel, handleAutoFix]);
-
-  const handleSendMessage = async (prompt: string) => {
-    setIsLoading(true);
-    const userMessage: ChatMessage = { role: 'user', content: prompt, model: selectedModel };
-    setMessages(prev => [...prev, userMessage]);
-
-    // Reset auto-fix context on new user message
-    setLastUserPrompt(null);
-    setLastAiActions(null);
-    setLastFileState(null);
-    
-    const originalFiles = files; // Keep a snapshot
-
-    try {
-        const cleanFileTree = getCleanFileTree(files);
-        const fileStructureString = JSON.stringify(cleanFileTree, null, 2);
-        
-        const flattenedFiles = getFlattenedFileTree(files);
-        const idToPathMap = new Map(flattenedFiles.map(node => [node.id, node.path]));
-
-        const openFilesContext = openFiles.map(file => {
-          const path = idToPathMap.get(file.id) || file.name;
-          return `File: ${path} (id: ${file.id})\n\`\`\`\n${file.content}\n\`\`\``
-        }).join('\n\n');
-
-        const fullPrompt = `User Request: "${prompt}"\n\nCurrent Project File Structure (with IDs):\n${fileStructureString}\n\nContent of currently open files:\n${openFilesContext || 'No files are currently open.'}`;
-      
-      const responseText = await getAiResponse(fullPrompt, selectedModel);
-      
-      let parsedResponse;
-      try {
-        parsedResponse = parseAiResponse(responseText);
-      } catch (e) {
-        console.error("Failed to parse AI response:", responseText);
-        const errorMessage = e instanceof Error ? e.message : 'Unknown parsing error.';
-        setMessages(prev => [...prev, { role: 'assistant', content: `Failed to parse AI response:\n${errorMessage}`, model: selectedModel, isError: true }]);
-        setIsLoading(false);
-        return;
-      }
-      
-      let didModifyFiles = false;
-      if (parsedResponse.actions && Array.isArray(parsedResponse.actions)) {
-        let tempFiles = files;
-        let tempOpenFileIds = [...openFileIds];
-        let tempActiveFileId = activeFileId;
-        const actionSummaries: string[] = [];
-
-        for (const action of parsedResponse.actions) {
-            if (['edit', 'create', 'delete'].includes(action.type)) {
-                didModifyFiles = true;
-            }
-            if (action.type === 'edit') {
-                const fileToEdit = findFileById(tempFiles, action.fileId);
-                if (fileToEdit && typeof action.content === 'string') {
-                    tempFiles = updateFileContentPure(tempFiles, action.fileId, action.content);
-                    actionSummaries.push(`Updated file: ${fileToEdit.name}`);
-                    tempActiveFileId = action.fileId;
-                    if (!tempOpenFileIds.includes(action.fileId)) {
-                        tempOpenFileIds.push(action.fileId);
-                    }
-                } else {
-                  console.warn('Skipping malformed "edit" action from AI:', action);
-                  actionSummaries.push(`Skipped malformed 'edit' action for file ID ${action.fileId}.`);
-                }
-            } else if (action.type === 'create') {
-                const newId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-                const newNode: FileNode = { id: newId, name: action.name, type: action.fileType, ...(action.fileType === 'file' ? { content: action.content || '' } : { children: [] }) };
-                tempFiles = addFileOrFolderPure(tempFiles, action.parentId, newNode);
-                actionSummaries.push(`Created ${action.fileType}: ${action.name}`);
-                 if (newNode.type === 'file') {
-                    tempActiveFileId = newId;
-                    if (!tempOpenFileIds.includes(newId)) {
-                        tempOpenFileIds.push(newId);
-                    }
-                }
-            } else if (action.type === 'delete') {
-                const fileToDelete = findFileById(tempFiles, action.fileId);
-                if (fileToDelete) {
-                    tempFiles = deleteFileOrFolderPure(tempFiles, action.fileId);
-                    actionSummaries.push(`Deleted ${fileToDelete.type}: ${fileToDelete.name}`);
-                    if (tempOpenFileIds.includes(action.fileId)) tempOpenFileIds = tempOpenFileIds.filter(fid => fid !== action.fileId);
-                    if (tempActiveFileId === action.fileId) tempActiveFileId = tempOpenFileIds.length > 0 ? tempOpenFileIds[0] : null;
-                }
-            } else if (action.type === 'chat') {
-                actionSummaries.push(action.message);
-            }
-        }
-        
-        setFiles(tempFiles);
-        setOpenFileIds(tempOpenFileIds);
-        setActiveFileId(tempActiveFileId);
-
-        if (actionSummaries.length > 0) {
-            setMessages(prev => [...prev, { role: 'assistant', content: actionSummaries.join('\n'), model: selectedModel }]);
-        } else if (!didModifyFiles) {
-            setMessages(prev => [...prev, { role: 'assistant', content: "I didn't make any changes. What would you like to do next?", model: selectedModel }]);
-        }
-
-        if (didModifyFiles) {
-          setLastUserPrompt(prompt);
-          setLastAiActions(parsedResponse.actions);
-          setLastFileState(originalFiles); // Save the state *before* the changes
-        }
-
-      } else {
-         throw new AiServiceError('AI returned an invalid action format.', 'invalid_format');
-      }
-      
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-        setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${errorMessage}`, model: selectedModel, isError: true }]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const buildPreviewHtml = useCallback(() => {
-    const htmlFile = findFileByPath(files, 'project/index.html');
-    if (!htmlFile || htmlFile.type !== 'file') return '<h1>index.html not found in project folder</h1>';
-
-    let htmlContent = htmlFile.content || '';
-
-    const regexCss = /<link\s+.*?href="([^"]+)"[^>]*>/g;
-    htmlContent = htmlContent.replace(regexCss, (match, href) => {
-        if (href.startsWith('http')) return match;
-        const cssFile = findFileByPath(files, `project/${href}`);
-        if (cssFile && cssFile.type === 'file' && cssFile.content) {
-            return `<style>${cssFile.content}</style>`;
-        }
-        return `<!-- CSS file not found: ${href} -->`;
-    });
-
-    const regexJs = /<script\s+.*?src="([^"]+)"[^>]*><\/script>/g;
-    htmlContent = htmlContent.replace(regexJs, (match, src) => {
-        if (src.startsWith('http')) return match;
-        const jsFile = findFileByPath(files, `project/${src}`);
-        if (jsFile && jsFile.type === 'file' && jsFile.content) {
-            return `<script>${jsFile.content}</script>`;
-        }
-        return `<!-- JS file not found: ${src} -->`;
-    });
-
-    return htmlContent;
-  }, [files]);
-
+  // Sync open files with active file
   useEffect(() => {
-    if (viewMode === 'preview') {
-      const newHtml = buildPreviewHtml();
-      setPreviewContent(newHtml);
+    const activeNode = activeFileId ? findFileById(files, activeFileId) : null;
+    if (activeNode && activeNode.type === 'file' && !openFiles.some(f => f.id === activeNode.id)) {
+      setOpenFiles(prev => [...prev, activeNode]);
     }
-  }, [files, viewMode, buildPreviewHtml]);
+    // Also, if a file in openFiles gets updated (e.g. by AI), we need to update it in the openFiles array
+    setOpenFiles(currentOpenFiles => {
+      return currentOpenFiles.map(of => findFileById(files, of.id) || of).filter((f): f is FileNode => !!f);
+    })
+  }, [activeFileId, files, setOpenFiles]);
+
+
+  const handleFileSelect = useCallback((id: string) => {
+    const file = findFileById(files, id);
+    if (file) {
+      setActiveFileId(id);
+      if (file.type === 'file' && !openFiles.some(f => f.id === id)) {
+        setOpenFiles(prev => [...prev, file]);
+      }
+    }
+  }, [files, openFiles, setActiveFileId, setOpenFiles]);
+
+
+  const handleContentChange = useCallback((id: string, content: string) => {
+    setFiles(prevFiles => updateFileContentPure(prevFiles, id, content));
+  }, [setFiles]);
+
+
+  const handleCloseFile = useCallback((id: string) => {
+    const remainingOpenFiles = openFiles.filter(f => f.id !== id);
+    setOpenFiles(remainingOpenFiles);
+    if (activeFileId === id) {
+      setActiveFileId(remainingOpenFiles.length > 0 ? remainingOpenFiles[remainingOpenFiles.length - 1].id : null);
+    }
+  }, [activeFileId, openFiles, setActiveFileId, setOpenFiles]);
+
+  const handleModelChange = useCallback((model: AiModel) => {
+    setSelectedModel(model);
+  }, [setSelectedModel]);
+
+  const addMessage = (message: Omit<ChatMessage, 'model'>) => {
+     setChatMessages(prev => [...prev, { ...message, model: selectedModel }]);
+  };
   
-  const handleDownloadProject = async () => {
-    const zip = new JSZip();
-    
-    function addFilesToZip(folder: any, nodes: FileNode[]) {
-        nodes.forEach(node => {
-            if (node.type === 'file') {
-                folder.file(node.name, node.content);
-            } else if (node.type === 'folder' && node.children) {
-                const subFolder = folder.folder(node.name);
-                addFilesToZip(subFolder, node.children);
-            }
-        });
+  const handleAddItem = (type: NodeType) => {
+    const name = prompt(`Enter name for new ${type}:`);
+    if (!name || name.trim() === '') {
+        return; // User cancelled or entered empty name
     }
 
-    // Add all root files and folders to the zip
-    addFilesToZip(zip, files);
+    let parentId: string | null = null;
+    const activeNode = activeFileId ? findFileById(files, activeFileId) : null;
 
-    const content = await zip.generateAsync({ type: "blob" });
-    FileSaver.saveAs(content, "cosmic-ai-builder-project.zip");
+    if (activeNode) {
+        if (activeNode.type === 'folder') {
+            parentId = activeNode.id;
+        } else {
+            const parentNode = findParentOfNode(files, activeNode.id);
+            parentId = parentNode ? parentNode.id : null;
+        }
+    }
+    
+    const newNode: FileNode = {
+        id: `${Date.now()}-${name}`, // More robust "unique" ID
+        name,
+        type,
+        ...(type === 'file' && { content: '' }),
+        ...(type === 'folder' && { children: [] }),
+    };
+
+    setFiles(currentFiles => addNodePure(currentFiles, parentId, newNode));
+
+    if (newNode.type === 'file') {
+        handleFileSelect(newNode.id);
+    }
+  };
+
+
+  const processAiActions = (actions: any[]) => {
+      let tempFiles = files;
+      actions.forEach(action => {
+          switch (action.type) {
+              case 'edit':
+                  if (action.fileId && action.content !== undefined) {
+                      tempFiles = updateFileContentPure(tempFiles, action.fileId, action.content);
+                      const fileToOpen = findFileById(tempFiles, action.fileId);
+                      if (fileToOpen && fileToOpen.type === 'file' && !openFiles.some(f => f.id === fileToOpen.id)) {
+                          setOpenFiles(prev => [...prev, fileToOpen]);
+                      }
+                      setActiveFileId(action.fileId);
+                  }
+                  break;
+              case 'create':
+                  const { parentId, fileType, name, content } = action;
+                  const newNode: FileNode = {
+                      id: `${Date.now()}-${name}`,
+                      name,
+                      type: fileType,
+                      ...(fileType === 'file' && { content: content || '' }),
+                      ...(fileType === 'folder' && { children: [] }),
+                  };
+                  tempFiles = addNodePure(tempFiles, parentId, newNode);
+                  if (newNode.type === 'file') {
+                      handleFileSelect(newNode.id);
+                  }
+                  break;
+              case 'delete':
+                  if (action.fileId) {
+                      if (openFiles.some(f => f.id === action.fileId)) {
+                        handleCloseFile(action.fileId);
+                      }
+                      tempFiles = deleteNodePure(tempFiles, action.fileId);
+                  }
+                  break;
+              case 'chat':
+                  if (action.message) {
+                      addMessage({ role: 'assistant', content: action.message });
+                  }
+                  break;
+          }
+      });
+      setFiles(tempFiles);
+  };
+
+  const constructAiPrompt = (userPrompt: string, error?: string) => {
+    const flatFileTree = flattenFileTree(files);
+    const openFileContents = openFiles
+        .map(file => `--- Open File: ${file.name} (ID: ${file.id}) ---\n${file.content}`)
+        .join('\n\n');
+        
+    let prompt = `The user wants to: "${userPrompt}".\n\n`;
+    if (error) {
+        prompt = `AUTO-FIX REQUEST: The previous attempt failed with an error. Please fix it.\nUser's original goal: "${userPrompt}"\nError message: "${error}"\n\n`;
+    }
+    
+    prompt += "Here is the complete file structure of the project. Use the file IDs for actions.\n";
+    prompt += JSON.stringify(flatFileTree, null, 2);
+    prompt += "\n\nHere are the contents of the currently open files:\n";
+    prompt += openFileContents || "No files are currently open.";
+    return prompt;
+  }
+  
+  const handleSendMessage = async (prompt: string, isAutoFix = false, originalPrompt = '') => {
+      if (!isAutoFix) {
+          addMessage({ role: 'user', content: prompt });
+      } else {
+          addMessage({ role: 'assistant', content: 'An error occurred in the preview. Attempting to auto-fix...', isAutoFix: true });
+      }
+      setIsLoading(true);
+
+      try {
+          const fullPrompt = constructAiPrompt(isAutoFix ? originalPrompt : prompt, isAutoFix ? prompt : undefined);
+          const responseText = await getAiResponse(fullPrompt, selectedModel, true);
+          
+          let parsedResponse;
+          try {
+              parsedResponse = JSON.parse(responseText.trim());
+          } catch(e) {
+              throw new AiServiceError(`AI returned invalid JSON. Response:\n${responseText}`, 'json_parse_error');
+          }
+          
+          if (!parsedResponse.actions || !Array.isArray(parsedResponse.actions)) {
+              throw new AiServiceError('AI response is missing "actions" array.', 'invalid_response_format');
+          }
+
+          processAiActions(parsedResponse.actions);
+
+      } catch (err) {
+          console.error("AI Service Error:", err);
+          const errorMessage = err instanceof AiServiceError ? err.message : 'An unknown error occurred.';
+          addMessage({ role: 'assistant', content: errorMessage, isError: true });
+      } finally {
+          setIsLoading(false);
+      }
+  };
+
+  const handlePreviewError = (error: string) => {
+    const lastUserMessage = [...chatMessages].reverse().find(m => m.role === 'user');
+    if (lastUserMessage) {
+        handleSendMessage(error, true, lastUserMessage.content);
+    } else {
+        addMessage({ role: 'assistant', content: `Preview Error: ${error}\nI can't auto-fix without a previous user command.`, isError: true });
+    }
+  };
+  
+  const buildPreviewContent = (): string => {
+    const htmlFile = files.find(f => f.name === 'project')?.children?.find(c => c.name === 'index.html');
+    if (!htmlFile || htmlFile.type !== 'file' || !htmlFile.content) return '<h1>Project `index.html` not found</h1>';
+
+    let processedHtml = htmlFile.content;
+    const projectRoot = findFileById(files, '1'); // project folder
+    if (!projectRoot || !projectRoot.children) return processedHtml;
+
+
+    const findFileByPath = (path: string) => {
+        const pathParts = path.split('/');
+        let currentNode: FileNode[] | undefined = projectRoot.children;
+        for (let i = 0; i < pathParts.length; i++) {
+            const part = pathParts[i];
+            const found = currentNode?.find(n => n.name === part);
+            if (!found) return null;
+            if (i === pathParts.length - 1) return found;
+            currentNode = found.children;
+        }
+        return null;
+    }
+
+    // Find all <link> and <script> tags and replace with inline content
+    const linkRegex = /<link\s+.*?href=["'](.*?)["'].*?>/g;
+    const scriptRegex = /<script\s+.*?src=["'](.*?)["'].*?>/gs;
+
+    processedHtml = processedHtml.replace(linkRegex, (match, href) => {
+        const cssFile = findFileByPath(href);
+        if (cssFile && cssFile.type === 'file' && cssFile.content) {
+            return `<style>\n${cssFile.content}\n</style>`;
+        }
+        return match; // Keep original tag if file not found
+    });
+
+    processedHtml = processedHtml.replace(scriptRegex, (match, src) => {
+        const jsFile = findFileByPath(src);
+        if (jsFile && jsFile.type === 'file' && jsFile.content) {
+            return `<script>\n${jsFile.content}\n</script>`;
+        }
+        return match; // Keep original tag if file not found
+    });
+
+    return processedHtml;
+  };
+  
+  const handleDownloadProject = () => {
+    const zip = new JSZip();
+
+    function addFilesToZip(nodes: FileNode[], path: string) {
+        for (const node of nodes) {
+            const currentPath = path ? `${path}/${node.name}` : node.name;
+            if (node.type === 'folder') {
+                if(node.children) addFilesToZip(node.children, currentPath);
+            } else if (node.content !== undefined) {
+                zip.file(currentPath, node.content);
+            }
+        }
+    }
+    
+    addFilesToZip(files, '');
+
+    zip.generateAsync({ type: 'blob' }).then(function (content: any) {
+      FileSaver.saveAs(content, 'cosmic-ai-project.zip');
+    });
   };
 
   return (
-    <div className="flex h-screen w-screen bg-background text-soft-white font-sans overflow-hidden">
-      <div className="absolute inset-0 z-0 opacity-20">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-primary rounded-full filter blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-accent rounded-full filter blur-3xl animate-pulse delay-1000"></div>
-      </div>
-      
+    <div className="flex h-screen w-screen text-soft-white font-sans bg-background overflow-hidden">
       <FileExplorer
         files={files}
         onFileSelect={handleFileSelect}
         activeFileId={activeFileId}
         onDownloadProject={handleDownloadProject}
+        onAddItem={handleAddItem}
       />
-      
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="flex-shrink-0 h-14 bg-surface/30 backdrop-blur-sm border-b border-white/10 flex items-center justify-between px-4 z-20">
-            <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-lavender-glow to-cyan-glow">
-                Cosmic AI Builder
-            </h1>
-            <div className="flex items-center gap-4">
-                <button
-                    onClick={handleDownloadProject}
-                    className="flex items-center gap-2 px-3 py-2 rounded-md bg-white/5 hover:bg-white/10 transition-all text-sm shadow-sm hover:shadow-glow-lavender/50"
-                >
-                    <DownloadIcon /> Download Project
-                </button>
-                <button
-                    onClick={() => setViewMode(viewMode === 'editor' ? 'preview' : 'editor')}
-                    className="flex items-center gap-2 px-3 py-2 rounded-md bg-gradient-to-r from-primary to-accent hover:from-primary/80 hover:to-accent/80 transition-all text-sm shadow-md hover:shadow-glow-purple"
-                >
-                    {viewMode === 'editor' ? <><EyeIcon /> Preview</> : <><CodeIcon /> Editor</>}
-                </button>
-            </div>
+      <main className="flex-1 flex flex-col min-w-0">
+        <header className="flex-shrink-0 flex items-center justify-between p-2 border-b border-white/10 bg-surface/50">
+          <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-lavender-glow to-cyan-glow">
+            Cosmic AI Builder
+          </h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setViewMode('editor')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-all ${viewMode === 'editor' ? 'bg-primary text-white shadow-glow-purple' : 'bg-white/5 hover:bg-white/10'}`}
+            >
+              <CodeIcon /> Editor
+            </button>
+            <button
+              onClick={() => setViewMode('preview')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-all ${viewMode === 'preview' ? 'bg-primary text-white shadow-glow-purple' : 'bg-white/5 hover:bg-white/10'}`}
+            >
+              <EyeIcon /> Preview
+            </button>
+          </div>
         </header>
-        <main className="flex-1 min-h-0 bg-black/10">
+
+        <div className="flex-1 min-h-0">
           {viewMode === 'editor' ? (
             <CodeEditor
               activeFile={activeFile}
-              onContentChange={handleCodeChange}
+              onContentChange={handleContentChange}
               openFiles={openFiles}
-              onFileSelect={setActiveFileId}
+              onFileSelect={handleFileSelect}
               onCloseFile={handleCloseFile}
             />
           ) : (
-            <Preview htmlContent={previewContent} onError={handlePreviewError} />
+            <Preview htmlContent={buildPreviewContent()} onError={handlePreviewError} />
           )}
-        </main>
-      </div>
-      
+        </div>
+      </main>
       <ChatAssistant
-        messages={messages}
+        messages={chatMessages}
         onSendMessage={handleSendMessage}
         isLoading={isLoading}
         selectedModel={selectedModel}
-        onModelChange={setSelectedModel}
+        onModelChange={handleModelChange}
         models={AI_MODELS}
       />
     </div>

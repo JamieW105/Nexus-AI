@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ChatMessage, AiModel, ModelInfo } from '../types';
-import { PaperAirplaneIcon, ChevronDownIcon } from './icons';
+import { ChatMessage, AiModel, ModelInfo } from '../types.ts';
+import { PaperAirplaneIcon, ChevronDownIcon } from './icons.tsx';
 
 interface ChatAssistantProps {
   messages: ChatMessage[];

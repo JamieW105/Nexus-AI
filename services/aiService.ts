@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { AiModel, ModelInfo } from '../types';
+import { AiModel, ModelInfo } from '../types.ts';
 
 export class AiServiceError extends Error {
   constructor(message: string, public code?: string) {

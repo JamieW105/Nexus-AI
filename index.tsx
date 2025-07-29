@@ -1,7 +1,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
+import App from './App.tsx';
 import { loader } from '@monaco-editor/react';
 
 // Configure monaco-editor loader to fetch assets from CDN
