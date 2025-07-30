@@ -1,8 +1,8 @@
-
 import { useState, useEffect, Dispatch, SetStateAction } from 'react';
 
 function useLocalStorage<T,>(key: string, initialValue: T): [T, Dispatch<SetStateAction<T>>] {
-  const [storedValue, setStoredValue] = useState<T>(() => {
+  // Move initial state logic to a separate function
+  const getInitialValue = () => {
     try {
       const item = window.localStorage.getItem(key);
       return item ? JSON.parse(item) : initialValue;
@@ -10,7 +10,9 @@ function useLocalStorage<T,>(key: string, initialValue: T): [T, Dispatch<SetStat
       console.error(error);
       return initialValue;
     }
-  });
+  };
+
+  const [storedValue, setStoredValue] = useState<T>(getInitialValue);
 
   const setValue = (value: T | ((val: T) => T)) => {
     try {
@@ -22,17 +24,20 @@ function useLocalStorage<T,>(key: string, initialValue: T): [T, Dispatch<SetStat
     }
   };
   
+  // Add key to dependency array and memoize the event listener
   useEffect(() => {
-      const handleStorageChange = (e: StorageEvent) => {
-          if (e.key === key && e.newValue) {
-              setStoredValue(JSON.parse(e.newValue));
-          }
-      };
-      window.addEventListener('storage', handleStorageChange);
-      return () => {
-          window.removeEventListener('storage', handleStorageChange);
-      };
-  }, [key]);
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === key && e.newValue) {
+        const newValue = JSON.parse(e.newValue);
+        if (JSON.stringify(newValue) !== JSON.stringify(storedValue)) {
+          setStoredValue(newValue);
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [key, storedValue]);
 
   return [storedValue, setValue];
 }

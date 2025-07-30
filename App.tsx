@@ -118,15 +118,24 @@ const App: React.FC = () => {
   useEffect(() => {
     const activeNode = activeFileId ? findFileById(files, activeFileId) : null;
     if (activeNode && activeNode.type === 'file' && !openFiles.some(f => f.id === activeNode.id)) {
-      setOpenFiles(prev => [...prev, activeNode]);
+      setOpenFiles(prev => {
+        const newOpenFiles = [...prev, activeNode];
+        return newOpenFiles;
+      });
     }
-    // Only update openFiles if files have actually changed
-    setOpenFiles(currentOpenFiles => {
-      const updatedFiles = currentOpenFiles.map(of => findFileById(files, of.id) || of).filter((f): f is FileNode => !!f);
-      return JSON.stringify(updatedFiles) === JSON.stringify(currentOpenFiles) ? currentOpenFiles : updatedFiles;
-    });
-  }, [activeFileId, files, openFiles, setOpenFiles]);
+  }, [activeFileId, files]); // Remove openFiles from dependencies
 
+  // Separate useEffect for syncing openFiles
+  useEffect(() => {
+    setOpenFiles(currentOpenFiles => {
+      const updatedFiles = currentOpenFiles
+        .map(of => findFileById(files, of.id) || of)
+        .filter((f): f is FileNode => !!f);
+      return JSON.stringify(updatedFiles) === JSON.stringify(currentOpenFiles) 
+        ? currentOpenFiles 
+        : updatedFiles;
+    });
+  }, [files]);
 
   const handleFileSelect = useCallback((id: string) => {
     const file = findFileById(files, id);
