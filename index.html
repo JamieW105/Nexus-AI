@@ -4,9 +4,55 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cosmic AI Builder</title>
+  
+  <!-- Core Libraries -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.24.9/babel.min.js"></script>
+
+  <!-- Define ESMS options *before* the script is loaded -->
+  <script>
+    window.esmsInitOptions = {
+      // The fetch hook is used to intercept and transpile .ts/.tsx files
+      async fetch(url, options) {
+        const res = await fetch(url, options);
+        if (!res.ok) return res; // Pass through errors
+
+        if (url.endsWith('.ts') || url.endsWith('.tsx')) {
+          const source = await res.text();
+          // Use Babel to transpile TypeScript and JSX
+          const { code } = Babel.transform(source, {
+            presets: ['react', 'typescript'],
+            filename: url // Filename is important for source maps and error messages
+          });
+          // Return the transpiled code as a JavaScript module
+          return new Response(new Blob([code], { type: 'application/javascript' }));
+        }
+        
+        // For all other file types, return the original response
+        return res;
+      },
+    };
+  </script>
+
+  <!-- Module Loading Polyfill -->
+  <script async src="https://ga.jspm.io/npm:es-module-shims@1.10.0/dist/es-module-shims.js"></script>
+  
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@^19.1.1",
+      "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+      "react/": "https://esm.sh/react@^19.1.1/",
+      "file-saver": "https://esm.sh/file-saver@^2.0.5",
+      "@google/genai": "https://esm.sh/@google/genai@^1.11.0",
+      "buffer": "https://esm.sh/buffer@^6.0.3",
+      "@monaco-editor/react": "https://esm.sh/@monaco-editor/react@^4.6.1"
+    }
+  }
+  </script>
+  
+  <!-- UI & Styling -->
   <script>
     tailwind.config = {
       theme: {
@@ -55,22 +101,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.1.1",
-    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
-    "react/": "https://esm.sh/react@^19.1.1/",
-    "file-saver": "https://esm.sh/file-saver@^2.0.5",
-    "@google/genai": "https://esm.sh/@google/genai@^1.11.0",
-    "buffer": "https://esm.sh/buffer@^6.0.3",
-    "@monaco-editor/react": "https://esm.sh/@monaco-editor/react@^4.6.1"
-  }
-}
-</script>
 </head>
 <body class="bg-background">
   <div id="root"></div>
-  <script type="text/babel" data-presets="react,typescript" data-type="module" src="./index.tsx"></script>
+  <!-- Main app entry point. es-module-shims will automatically handle it -->
+  <script type="module" src="./index.tsx"></script>
 </body>
 </html>
