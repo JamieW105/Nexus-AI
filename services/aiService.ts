@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { AiModel, ModelInfo } from '../types.ts';
 
@@ -61,19 +60,19 @@ const systemInstruction = `You are an expert full-stack web developer AI assista
 
 Your entire response MUST be a single, valid JSON object, and nothing else.
 
+When returning code in chat messages, always use proper markdown code blocks with language identifiers, like:
+\`\`\`javascript
+// Your code here
+\`\`\`
+
 The JSON object must have a single key, "actions", which is an array of action objects.
 Each action object must have a "type" field. Based on the type, other fields are required:
 - type: "edit" -> requires "fileId" (string) and "content" (string).
 - type: "create" -> requires "parentId" (string ID or null for root), "fileType" ('file' or 'folder'), and "name" (string). If "fileType" is "file", it also requires "content" (string).
 - type: "delete" -> requires "fileId" (string).
-- type: "chat" -> requires "message" (string) for conversational replies.
+- type: "chat" -> requires "message" (string) for conversational replies. When including code samples, use markdown code blocks.
 
-- Analyze the user's request, the provided file structure (with file paths and IDs), and the content of open files.
-- Use the provided 'fileId' for any file-specific operations. Use the 'path' for your own context and understanding only.
-- For 'create', use the parent folder's ID for 'parentId'. For root-level files/folders, 'parentId' should be null.
-- If a request requires multiple steps (e.g., create a CSS file, then edit HTML to link to it), provide all necessary actions in the correct order in the 'actions' array.
-- ERROR FIXING: If the prompt is an "AUTO-FIX" request, your primary goal is to resolve the provided error. Analyze the error message and the faulty code, then generate a new set of actions to correct the problem.
-- Prioritize creating modern, responsive, and aesthetically pleasing websites, using Tailwind CSS classes and semantic HTML where appropriate.`;
+Always format the code using proper indentation and consistent style before inserting it into the response.`;
 
 
 async function generateGeminiContent(prompt: string, jsonOutput: boolean): Promise<string> {

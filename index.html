@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cosmic AI Builder</title>
+  <title>My Blog</title>
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   
   <!-- Core Libraries -->
@@ -117,6 +117,52 @@
   </script>
 </head>
 <body class="bg-background">
+  <!-- Navigation -->
+  <nav class="bg-white shadow-lg">
+      <div class="max-w-6xl mx-auto px-4">
+          <div class="flex justify-between items-center h-16">
+              <div class="text-xl font-bold">My Blog</div>
+              <div class="space-x-4">
+                  <a href="#" class="hover:text-blue-500">Home</a>
+                  <a href="#" class="hover:text-blue-500">Posts</a>
+                  <a href="#" class="hover:text-blue-500">About</a>
+                  <a href="#" class="hover:text-blue-500">Contact</a>
+              </div>
+          </div>
+      </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <div class="bg-blue-600 text-white py-16">
+      <div class="max-w-6xl mx-auto px-4 text-center">
+          <h1 class="text-4xl font-bold mb-4">Welcome to My Blog</h1>
+          <p class="text-xl">Sharing thoughts, ideas and discoveries</p>
+      </div>
+  </div>
+
+  <!-- Posts Grid -->
+  <div class="max-w-6xl mx-auto px-4 py-12">
+      <h2 class="text-3xl font-bold mb-8">Recent Posts</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <!-- Post cards will go here -->
+      </div>
+  </div>
+
+  <!-- About Section -->
+  <div class="bg-white py-12">
+      <div class="max-w-6xl mx-auto px-4">
+          <h2 class="text-3xl font-bold mb-8">About</h2>
+          <p class="text-gray-600">Your about content here...</p>
+      </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-gray-800 text-white py-8">
+      <div class="max-w-6xl mx-auto px-4 text-center">
+          <p>&copy; 2024 My Blog. All rights reserved.</p>
+      </div>
+  </footer>
+
   <div id="root"></div>
   <script type="module" src="/src/index.tsx"></script>
 </body>
