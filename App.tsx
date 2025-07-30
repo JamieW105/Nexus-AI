@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { FileNode, ChatMessage, AiModel, ViewMode, FlatFileNode, NodeType } from './types.ts';
 import { INITIAL_FILES, AI_MODELS } from './constants.ts';
@@ -121,11 +120,12 @@ const App: React.FC = () => {
     if (activeNode && activeNode.type === 'file' && !openFiles.some(f => f.id === activeNode.id)) {
       setOpenFiles(prev => [...prev, activeNode]);
     }
-    // Also, if a file in openFiles gets updated (e.g. by AI), we need to update it in the openFiles array
+    // Only update openFiles if files have actually changed
     setOpenFiles(currentOpenFiles => {
-      return currentOpenFiles.map(of => findFileById(files, of.id) || of).filter((f): f is FileNode => !!f);
-    })
-  }, [activeFileId, files, setOpenFiles]);
+      const updatedFiles = currentOpenFiles.map(of => findFileById(files, of.id) || of).filter((f): f is FileNode => !!f);
+      return JSON.stringify(updatedFiles) === JSON.stringify(currentOpenFiles) ? currentOpenFiles : updatedFiles;
+    });
+  }, [activeFileId, files, openFiles, setOpenFiles]);
 
 
   const handleFileSelect = useCallback((id: string) => {

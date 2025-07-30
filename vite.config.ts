@@ -6,9 +6,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
     plugins: [react()],
-    base: '/Nexus-AI/', // Add this for GitHub Pages
+    base: mode === 'production' ? '/Nexus-AI/' : '/',
     define: {
-      // Fallback to empty string if env vars aren't available
       'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || '')
     },
@@ -22,7 +21,9 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
-      open: true
+      open: true,
+      // Handle 404s in development
+      historyApiFallback: true
     }
   };
 });

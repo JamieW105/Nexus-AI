@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Public - exclude config.js but keep other public files
+public/config.js
+!public/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
