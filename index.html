@@ -18,7 +18,9 @@
         const res = await fetch(url, options);
         if (!res.ok) return res; // Pass through errors
 
-        if (url.endsWith('.ts') || url.endsWith('.tsx')) {
+        const urlObj = new URL(url, document.baseURI);
+        // Only transpile local files, not files from other origins like the CDN
+        if (urlObj.origin === window.location.origin && (url.endsWith('.ts') || url.endsWith('.tsx'))) {
           const source = await res.text();
           // Use Babel to transpile TypeScript and JSX
           const { code } = Babel.transform(source, {
@@ -35,8 +37,8 @@
     };
   </script>
 
-  <!-- Module Loading Polyfill -->
-  <script async src="https://ga.jspm.io/npm:es-module-shims@1.10.0/dist/es-module-shims.js"></script>
+  <!-- Module Loading Polyfill (must not be async to ensure it runs before the module-shim script) -->
+  <script src="https://ga.jspm.io/npm:es-module-shims@1.10.0/dist/es-module-shims.js"></script>
   
   <script type="importmap">
   {
@@ -104,7 +106,7 @@
 </head>
 <body class="bg-background">
   <div id="root"></div>
-  <!-- Main app entry point. es-module-shims will automatically handle it -->
-  <script type="module" src="./index.tsx"></script>
+  <!-- Main app entry point. Must be type="module-shim" to be handled by the polyfill. -->
+  <script type="module-shim" src="./index.tsx"></script>
 </body>
 </html>
