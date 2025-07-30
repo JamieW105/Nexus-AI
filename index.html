@@ -24,7 +24,10 @@
           const source = await res.text();
           // Use Babel to transpile TypeScript and JSX
           const { code } = Babel.transform(source, {
-            presets: ['react', 'typescript'],
+            presets: [
+              [Babel.availablePresets["typescript"]],
+              [Babel.availablePresets["react"]]
+            ],
             filename: url // Filename is important for source maps and error messages
           });
           // Return the transpiled code as a JavaScript module
@@ -43,10 +46,10 @@
   <script type="importmap">
   {
     "imports": {
-      "react": "https://esm.sh/react@^19.1.1",
-      "react-dom/client": "https://esm.sh/react-dom@^19.1.1/client",
-      "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
-      "react/": "https://esm.sh/react@^19.1.1/",
+      "react": "https://esm.sh/react@18.2.0",
+      "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+      "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+      "react/": "https://esm.sh/react@18.2.0/",
       "file-saver": "https://esm.sh/file-saver@^2.0.5",
       "@google/genai": "https://esm.sh/@google/genai@^1.11.0",
       "buffer": "https://esm.sh/buffer@^6.0.3",
